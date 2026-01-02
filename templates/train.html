@@ -1,0 +1,746 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <div class="bg-white rounded-lg shadow-lg p-8 mb-6">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">Training Control</h1>
+        
+        <form id="trainingForm" class="space-y-6">
+            <!-- Circuit Selection Section -->
+            <div class="bg-blue-50 border-2 border-blue-300 rounded-lg p-4 mb-4">
+                <h3 class="text-lg font-semibold text-blue-800 mb-3">Circuit Selection</h3>
+                <div class="space-y-4">
+                    <div class="flex gap-4">
+                        <label class="flex items-center">
+                            <input type="radio" name="circuitSource" value="library" id="circuitSourceLibrary" checked 
+                                   class="mr-2" onchange="toggleCircuitSource()">
+                            <span class="font-semibold">Use Library Circuit</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="circuitSource" value="custom" id="circuitSourceCustom" 
+                                   class="mr-2" onchange="toggleCircuitSource()">
+                            <span class="font-semibold">Upload Custom Circuit (.qasm)</span>
+                        </label>
+                    </div>
+                    
+                    <div id="libraryCircuitSection">
+                        <label class="block text-gray-700 font-semibold mb-2">Select Circuit</label>
+                        <select name="circuit_name" id="circuit_name" class="w-full border border-gray-300 rounded px-4 py-2"
+                                onchange="updateOriginalCircuitDiagram()">
+                            <option value="ghz_3">GHZ (3 qubits)</option>
+                            <option value="ghz_4">GHZ (4 qubits)</option>
+                            <option value="ghz_5">GHZ (5 qubits)</option>
+                            <option value="bell">Bell State</option>
+                            <option value="qft_3">QFT (3 qubits)</option>
+                            <option value="qft_4">QFT (4 qubits)</option>
+                            <option value="qft_5">QFT (5 qubits)</option>
+                            <option value="w_3">W State (3 qubits)</option>
+                            <option value="w_4">W State (4 qubits)</option>
+                            <option value="adder_4">Adder (4 qubits)</option>
+                            <option value="adder_6">Adder (6 qubits)</option>
+                            <option value="swap_test_3">Swap Test (3 qubits)</option>
+                            <option value="swap_test_5">Swap Test (5 qubits)</option>
+                            <option value="teleportation">Teleportation</option>
+                            <option value="deutsch_jozsa_3">Deutsch-Jozsa (3 qubits)</option>
+                            <option value="deutsch_jozsa_4">Deutsch-Jozsa (4 qubits)</option>
+                        </select>
+                    </div>
+                    
+                    <div id="customCircuitSection" class="hidden">
+                        <label class="block text-gray-700 font-semibold mb-2">Upload Custom Circuit (.qasm)</label>
+                        <input type="file" id="customCircuitFile" accept=".qasm" 
+                               class="w-full border border-gray-300 rounded px-4 py-2"
+                               onchange="handleCustomCircuitUpload()">
+                        <p class="text-xs text-gray-500 mt-1">Upload a QASM file to use your own circuit</p>
+                        <div id="uploadedCircuitInfo" class="mt-2 hidden">
+                            <p class="text-sm text-green-600 font-semibold">✓ File uploaded</p>
+                            <p class="text-xs text-gray-600" id="uploadedCircuitDetails"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <div>
+                    <label class="block text-gray-700 font-semibold mb-2">Number of Episodes</label>
+                    <input type="number" name="num_episodes" id="num_episodes" value="100" 
+                           class="w-full border border-gray-300 rounded px-4 py-2">
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 font-semibold mb-2">Max Steps per Episode</label>
+                    <input type="number" name="max_steps" id="max_steps" value="50" 
+                           class="w-full border border-gray-300 rounded px-4 py-2">
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 font-semibold mb-2">Fidelity Threshold</label>
+                    <input type="number" step="0.01" name="fidelity_threshold" id="fidelity_threshold" value="0.99" 
+                           class="w-full border border-gray-300 rounded px-4 py-2">
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 font-semibold mb-2">Learning Rate</label>
+                    <input type="number" step="0.0001" name="learning_rate" id="learning_rate" value="0.0001" 
+                           class="w-full border border-gray-300 rounded px-4 py-2">
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 font-semibold mb-2">Discount Factor (γ)</label>
+                    <input type="number" step="0.01" name="gamma" id="gamma" value="0.99" 
+                           class="w-full border border-gray-300 rounded px-4 py-2">
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 font-semibold mb-2">Save Directory (Optional)</label>
+                    <div class="flex gap-2">
+                        <input type="text" name="save_directory" id="save_directory" 
+                               placeholder="Leave empty for default (results/)"
+                               class="flex-1 border border-gray-300 rounded px-4 py-2">
+                        <input type="file" id="saveDirectoryPicker" webkitdirectory directory 
+                               style="display: none;" onchange="handleSaveDirectorySelect(event)">
+                        <!-- <button type="button" onclick="handleBrowseSaveDirectory()" 
+                                class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 whitespace-nowrap">
+                            Browse...
+                        </button> -->
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Custom directory to save training results</p>
+                </div>
+            </div>
+            
+            <div class="flex space-x-4">
+                <button type="button" onclick="startTraining()" id="startBtn" 
+                        class="bg-green-600 text-white px-6 py-3 rounded hover:bg-green-700">
+                    Start Training
+                </button>
+                <button type="button" onclick="stopTraining()" id="stopBtn" 
+                        class="bg-red-600 text-white px-6 py-3 rounded hover:bg-red-700" disabled>
+                    Stop Training
+                </button>
+            </div>
+        </form>
+    </div>
+    
+    <div class="bg-white rounded-lg shadow-lg p-8">
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">Training Status</h2>
+        <div id="status" class="text-gray-600 mb-4">
+            <p>Status: <span id="statusText">Not Started</span></p>
+            <p>Episode: <span id="episodeText">0</span></p>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-blue-50 p-4 rounded">
+                <p class="text-sm text-gray-600">Reward</p>
+                <p class="text-2xl font-bold" id="rewardText">-</p>
+            </div>
+            <div class="bg-green-50 p-4 rounded">
+                <p class="text-sm text-gray-600">Gate Count</p>
+                <p class="text-2xl font-bold" id="gateCountText">-</p>
+            </div>
+            <div class="bg-yellow-50 p-4 rounded">
+                <p class="text-sm text-gray-600">Depth</p>
+                <p class="text-2xl font-bold" id="depthText">-</p>
+            </div>
+            <div class="bg-purple-50 p-4 rounded">
+                <p class="text-sm text-gray-600">Fidelity</p>
+                <p class="text-2xl font-bold" id="fidelityText">-</p>
+            </div>
+        </div>
+        
+        <div class="mt-6">
+            <canvas id="metricsChart" width="400" height="200"></canvas>
+        </div>
+    </div>
+    
+    <!-- Circuit Comparison Section -->
+    <div class="bg-white rounded-lg shadow-lg p-8 mt-6">
+        <h2 class="text-2xl font-bold text-gray-800 mb-6">Circuit Comparison</h2>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- Original Circuit -->
+            <div class="border-2 border-blue-300 rounded-lg p-4 bg-blue-50">
+                <h3 class="text-xl font-semibold text-blue-800 mb-3">Original Circuit</h3>
+                <div class="bg-white border border-gray-200 rounded-lg p-4 mb-4 min-h-[200px] flex items-center justify-center">
+                    <img id="originalCircuitImg" 
+                         src="" 
+                         alt="Original circuit diagram" 
+                         class="max-w-full h-auto"
+                         style="display: none;">
+                    <p id="originalCircuitPlaceholder" class="text-gray-500 text-center">
+                        Select a circuit and start training to see the original circuit
+                    </p>
+                </div>
+                <div id="originalMetrics" class="space-y-2 text-sm text-gray-700" style="display: none;">
+                    <p><strong>Gate Count:</strong> <span id="originalGateCount">-</span></p>
+                    <p><strong>Depth:</strong> <span id="originalDepth">-</span></p>
+                </div>
+            </div>
+            
+            <!-- Optimized Circuit -->
+            <div class="border-2 border-green-300 rounded-lg p-4 bg-green-50">
+                <h3 class="text-xl font-semibold text-green-800 mb-3">Optimized Circuit</h3>
+                <div class="bg-white border border-gray-200 rounded-lg p-4 mb-4 min-h-[200px] flex items-center justify-center">
+                    <img id="optimizedCircuitImg" 
+                         src="" 
+                         alt="Optimized circuit diagram" 
+                         class="max-w-full h-auto"
+                         style="display: none;">
+                    <p id="optimizedCircuitPlaceholder" class="text-gray-500 text-center">
+                        Training in progress... Optimized circuit will appear here
+                    </p>
+                </div>
+                <div id="optimizedMetrics" class="space-y-2 text-sm text-gray-700" style="display: none;">
+                    <p><strong>Gate Count:</strong> <span id="optimizedGateCount">-</span></p>
+                    <p><strong>Depth:</strong> <span id="optimizedDepth">-</span></p>
+                    <p><strong>Fidelity:</strong> <span id="optimizedFidelity">-</span></p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Comparison Metrics -->
+        <div id="comparisonMetrics" class="bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-300 rounded-lg p-6" style="display: none;">
+            <h3 class="text-xl font-semibold text-purple-800 mb-4">Optimization Results</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-white rounded-lg p-4 shadow">
+                    <p class="text-sm text-gray-600 mb-1">Gate Count Reduction</p>
+                    <p class="text-2xl font-bold text-green-600" id="gateReduction">-</p>
+                    <p class="text-xs text-gray-500" id="gateReductionPercent">-</p>
+                </div>
+                <div class="bg-white rounded-lg p-4 shadow">
+                    <p class="text-sm text-gray-600 mb-1">Depth Reduction</p>
+                    <p class="text-2xl font-bold text-blue-600" id="depthReduction">-</p>
+                    <p class="text-xs text-gray-500" id="depthReductionPercent">-</p>
+                </div>
+                <div class="bg-white rounded-lg p-4 shadow">
+                    <p class="text-sm text-gray-600 mb-1">Fidelity</p>
+                    <p class="text-2xl font-bold text-purple-600" id="bestFidelity">-</p>
+                    <p class="text-xs text-gray-500">Maintained above threshold</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let chart = null;
+let updateInterval = null;
+let statusCheckInterval = null;
+
+// Load selected circuit from localStorage
+window.addEventListener('DOMContentLoaded', () => {
+    const selectedCircuit = localStorage.getItem('selectedCircuit');
+    if (selectedCircuit) {
+        document.getElementById('circuit_name').value = selectedCircuit;
+        // Load original circuit diagram
+        loadOriginalCircuit(selectedCircuit);
+    }
+    
+    initializeChart();
+    checkTrainingStatus();
+});
+
+function toggleCircuitSource() {
+    const libraryRadio = document.getElementById('circuitSourceLibrary');
+    const customRadio = document.getElementById('circuitSourceCustom');
+    const librarySection = document.getElementById('libraryCircuitSection');
+    const customSection = document.getElementById('customCircuitSection');
+    
+    if (libraryRadio.checked) {
+        librarySection.classList.remove('hidden');
+        customSection.classList.add('hidden');
+        // Update diagram when switching to library
+        updateOriginalCircuitDiagram();
+    } else {
+        librarySection.classList.add('hidden');
+        customSection.classList.remove('hidden');
+    }
+}
+
+function updateOriginalCircuitDiagram() {
+    const libraryRadio = document.getElementById('circuitSourceLibrary');
+    if (libraryRadio && libraryRadio.checked) {
+        const circuitName = document.getElementById('circuit_name').value;
+        if (circuitName) {
+            loadOriginalCircuit(circuitName);
+        }
+    }
+}
+
+async function handleCustomCircuitUpload() {
+    const fileInput = document.getElementById('customCircuitFile');
+    if (!fileInput.files.length) {
+        return;
+    }
+    
+    const file = fileInput.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        const response = await fetch('/api/circuit/upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            // Show uploaded circuit info
+            document.getElementById('uploadedCircuitInfo').classList.remove('hidden');
+            document.getElementById('uploadedCircuitDetails').textContent = 
+                `${result.num_qubits} qubits, ${result.gate_count} gates, depth ${result.depth}`;
+            
+            // Update original circuit diagram
+            if (result.diagram_path) {
+                const originalImg = document.getElementById('originalCircuitImg');
+                const originalPlaceholder = document.getElementById('originalCircuitPlaceholder');
+                if (originalImg && originalPlaceholder) {
+                    originalImg.src = `/api/circuit/custom/${result.filename}/diagram?t=${Date.now()}`;
+                    originalImg.onload = () => {
+                        originalImg.style.display = 'block';
+                        originalPlaceholder.style.display = 'none';
+                    };
+                }
+            }
+        } else {
+            alert('Error uploading circuit: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error uploading circuit: ' + error.message);
+    }
+}
+
+function handleBrowseSaveDirectory() {
+    const saveDirInput = document.getElementById('save_directory');
+    const filePicker = document.getElementById('saveDirectoryPicker');
+    
+    // Trigger the file picker
+    filePicker.click();
+}
+
+function handleSaveDirectorySelect(event) {
+    const files = event.target.files;
+    const saveDirInput = document.getElementById('save_directory');
+    
+    if (files.length > 0) {
+        // Get the directory path from the first file
+        // webkitRelativePath gives us the relative path from the selected directory
+        const filePath = files[0].webkitRelativePath;
+        
+        if (filePath) {
+            // Extract directory path (remove filename)
+            const directoryPath = filePath.substring(0, filePath.lastIndexOf('/'));
+            // Get the base directory name (first part of the path)
+            const baseDir = directoryPath.split('/')[0];
+            
+            // Since browsers don't expose full paths for security reasons,
+            // we'll use the directory name and prompt for the full path
+            const fullPath = prompt(
+                `Selected directory: ${baseDir}\n\nPlease enter the full path to this directory where you want to save the output (.qasm and .json files):`,
+                saveDirInput.value || ''
+            );
+            
+            if (fullPath !== null && fullPath.trim()) {
+                saveDirInput.value = fullPath.trim();
+            } else if (baseDir) {
+                // Fallback: use just the directory name
+                saveDirInput.value = baseDir;
+            }
+        } else {
+            // Fallback: prompt for path
+            const userPath = prompt('Enter the full path to the save directory where you want to save the output (.qasm and .json files) (or leave empty for default):', saveDirInput.value);
+            if (userPath !== null) {
+                saveDirInput.value = userPath.trim();
+            }
+        }
+    }
+    
+    // Reset the file input so the same directory can be selected again
+    event.target.value = '';
+}
+
+async function loadOriginalCircuit(circuitName) {
+    try {
+        const originalImg = document.getElementById('originalCircuitImg');
+        const originalPlaceholder = document.getElementById('originalCircuitPlaceholder');
+        const originalMetrics = document.getElementById('originalMetrics');
+        
+        if (!originalImg || !originalPlaceholder) {
+            return; // Elements not found, might not be on page yet
+        }
+        
+        originalImg.src = `/api/circuit/${circuitName}/diagram`;
+        originalImg.style.display = 'block';
+        originalPlaceholder.style.display = 'none';
+        
+        // Get circuit info from API or template data
+        {% if circuits %}
+        const circuits = {{ circuits|tojson }};
+        if (circuits[circuitName]) {
+            if (originalMetrics) {
+                originalMetrics.style.display = 'block';
+                document.getElementById('originalGateCount').textContent = circuits[circuitName].gate_count;
+                document.getElementById('originalDepth').textContent = circuits[circuitName].depth;
+            }
+        }
+        {% else %}
+        // Fallback: fetch from API
+        try {
+            const response = await fetch('/api/circuits');
+            const circuitList = await response.json();
+            const circuit = circuitList.find(c => c.name === circuitName);
+            if (circuit && originalMetrics) {
+                originalMetrics.style.display = 'block';
+                document.getElementById('originalGateCount').textContent = circuit.gate_count;
+                document.getElementById('originalDepth').textContent = circuit.depth;
+            }
+        } catch (e) {
+            console.error('Error fetching circuit info:', e);
+        }
+        {% endif %}
+    } catch (error) {
+        console.error('Error loading original circuit:', error);
+    }
+}
+
+function initializeChart() {
+    const ctx = document.getElementById('metricsChart').getContext('2d');
+    chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: 'Gate Count',
+                    data: [],
+                    borderColor: 'rgb(34, 197, 94)',
+                    tension: 0.1
+                },
+                {
+                    label: 'Depth',
+                    data: [],
+                    borderColor: 'rgb(234, 179, 8)',
+                    tension: 0.1
+                },
+                {
+                    label: 'Fidelity',
+                    data: [],
+                    borderColor: 'rgb(168, 85, 247)',
+                    tension: 0.1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+async function startTraining() {
+    const form = document.getElementById('trainingForm');
+    const libraryRadio = document.getElementById('circuitSourceLibrary');
+    const customFileInput = document.getElementById('customCircuitFile');
+    let customCircuitFile = null;
+    
+    // Check which circuit source is selected
+    if (libraryRadio.checked) {
+        // Using library circuit - will be handled by circuit_name in form data
+    } else {
+        // Check if custom circuit file is uploaded
+        if (customFileInput.files.length > 0) {
+            const file = customFileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const uploadResponse = await fetch('/api/circuit/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const uploadResult = await uploadResponse.json();
+                
+                if (uploadResponse.ok) {
+                    customCircuitFile = uploadResult.filepath;
+                } else {
+                    alert('Error uploading circuit: ' + uploadResult.error);
+                    return;
+                }
+            } catch (error) {
+                alert('Error uploading circuit: ' + error.message);
+                return;
+            }
+        } else {
+            alert('Please upload a custom circuit file');
+            return;
+        }
+    }
+    
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData);
+    
+    // Convert string numbers to actual numbers
+    data.num_episodes = parseInt(data.num_episodes);
+    data.max_steps = parseInt(data.max_steps);
+    data.fidelity_threshold = parseFloat(data.fidelity_threshold);
+    data.learning_rate = parseFloat(data.learning_rate);
+    data.gamma = parseFloat(data.gamma);
+    
+    // Add custom circuit file if uploaded
+    if (customCircuitFile) {
+        data.custom_circuit_file = customCircuitFile;
+        data.circuit_name = 'custom_' + customFileInput.files[0].name.replace('.qasm', '');
+    }
+    
+    // Add save directory if provided
+    if (data.save_directory && data.save_directory.trim()) {
+        data.save_directory = data.save_directory.trim();
+    } else {
+        delete data.save_directory;
+    }
+    
+    try {
+        const response = await fetch('/api/train/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+            document.getElementById('statusText').textContent = 'Training';
+            
+            // Load original circuit diagram
+            if (customCircuitFile) {
+                // For custom circuits, diagram should already be loaded
+                const originalImg = document.getElementById('originalCircuitImg');
+                const originalPlaceholder = document.getElementById('originalCircuitPlaceholder');
+                if (originalImg && originalPlaceholder) {
+                    // Diagram should already be loaded from handleCustomCircuitUpload
+                }
+            } else {
+                loadOriginalCircuit(data.circuit_name);
+            }
+            
+            // Start polling for updates
+            updateInterval = setInterval(updateMetrics, 2000);
+            updateMetrics();
+            
+            // Start status checking if not already running
+            if (!statusCheckInterval) {
+                statusCheckInterval = setInterval(checkTrainingStatus, 5000);
+            }
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error starting training: ' + error.message);
+    }
+}
+
+async function stopTraining() {
+    try {
+        const response = await fetch('/api/train/stop', {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('statusText').textContent = 'Stopped';
+            
+            if (updateInterval) {
+                clearInterval(updateInterval);
+                updateInterval = null;
+            }
+            
+            if (statusCheckInterval) {
+                clearInterval(statusCheckInterval);
+                statusCheckInterval = null;
+            }
+        }
+    } catch (error) {
+        alert('Error stopping training: ' + error.message);
+    }
+}
+
+async function checkTrainingStatus() {
+    try {
+        const response = await fetch('/api/train/status');
+        const status = await response.json();
+        
+        if (status.is_training) {
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+            document.getElementById('statusText').textContent = 'Training';
+            document.getElementById('episodeText').textContent = status.episode;
+            
+            if (!updateInterval) {
+                updateInterval = setInterval(updateMetrics, 2000);
+            }
+            updateMetrics();
+        } else {
+            // Training is not running - stop all polling
+            if (updateInterval) {
+                clearInterval(updateInterval);
+                updateInterval = null;
+            }
+            
+            // Update UI to show training is complete
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('statusText').textContent = 'Completed';
+            
+            // Stop the status check interval as well
+            if (statusCheckInterval) {
+                clearInterval(statusCheckInterval);
+                statusCheckInterval = null;
+            }
+        }
+    } catch (error) {
+        console.error('Error checking status:', error);
+    }
+}
+
+async function updateMetrics() {
+    try {
+        // First check if training is still running
+        const statusResponse = await fetch('/api/train/status');
+        const status = await statusResponse.json();
+        
+        if (!status.is_training) {
+            // Training has finished - stop polling
+            if (updateInterval) {
+                clearInterval(updateInterval);
+                updateInterval = null;
+            }
+            
+            // Update UI
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('statusText').textContent = 'Completed';
+            
+            // Stop status check interval
+            if (statusCheckInterval) {
+                clearInterval(statusCheckInterval);
+                statusCheckInterval = null;
+            }
+            
+            return; // Don't fetch metrics if training is done
+        }
+        
+        const response = await fetch('/api/train/metrics');
+        const data = await response.json();
+        
+        if (data.latest) {
+            document.getElementById('rewardText').textContent = data.latest.reward.toFixed(2);
+            document.getElementById('gateCountText').textContent = data.latest.gate_count;
+            document.getElementById('depthText').textContent = data.latest.depth;
+            document.getElementById('fidelityText').textContent = data.latest.fidelity.toFixed(4);
+        }
+        
+        if (data.history && chart) {
+            const episodes = data.history.gate_counts.map((_, i) => i);
+            chart.data.labels = episodes;
+            chart.data.datasets[0].data = data.history.gate_counts;
+            chart.data.datasets[1].data = data.history.depths;
+            chart.data.datasets[2].data = data.history.fidelities;
+            chart.update();
+        }
+        
+        // Update circuit diagrams and comparison
+        updateCircuitComparison(data);
+    } catch (error) {
+        console.error('Error updating metrics:', error);
+    }
+}
+
+async function updateCircuitComparison(data) {
+    // Update original circuit
+    if (data.original) {
+        try {
+            const originalImg = document.getElementById('originalCircuitImg');
+            const originalPlaceholder = document.getElementById('originalCircuitPlaceholder');
+            const originalMetrics = document.getElementById('originalMetrics');
+            
+            originalImg.src = `/api/train/circuit/original?t=${Date.now()}`;
+            originalImg.style.display = 'block';
+            originalPlaceholder.style.display = 'none';
+            originalMetrics.style.display = 'block';
+            
+            document.getElementById('originalGateCount').textContent = data.original.gate_count;
+            document.getElementById('originalDepth').textContent = data.original.depth;
+        } catch (error) {
+            console.error('Error loading original circuit:', error);
+        }
+    }
+    
+    // Update optimized circuit
+    if (data.best) {
+        try {
+            const optimizedImg = document.getElementById('optimizedCircuitImg');
+            const optimizedPlaceholder = document.getElementById('optimizedCircuitPlaceholder');
+            const optimizedMetrics = document.getElementById('optimizedMetrics');
+            const comparisonMetrics = document.getElementById('comparisonMetrics');
+            
+            optimizedImg.src = `/api/train/circuit/optimized?t=${Date.now()}`;
+            optimizedImg.style.display = 'block';
+            optimizedPlaceholder.style.display = 'none';
+            optimizedMetrics.style.display = 'block';
+            comparisonMetrics.style.display = 'block';
+            
+            document.getElementById('optimizedGateCount').textContent = data.best.gate_count;
+            document.getElementById('optimizedDepth').textContent = data.best.depth;
+            document.getElementById('optimizedFidelity').textContent = data.best.fidelity.toFixed(4);
+            
+            // Update comparison metrics
+            if (data.original) {
+                const gateReduction = data.original.gate_count - data.best.gate_count;
+                const depthReduction = data.original.depth - data.best.depth;
+                const gateReductionPercent = ((gateReduction / data.original.gate_count) * 100).toFixed(1);
+                const depthReductionPercent = ((depthReduction / data.original.depth) * 100).toFixed(1);
+                
+                document.getElementById('gateReduction').textContent = gateReduction > 0 ? `-${gateReduction}` : gateReduction;
+                document.getElementById('gateReductionPercent').textContent = gateReductionPercent + '% reduction';
+                document.getElementById('depthReduction').textContent = depthReduction > 0 ? `-${depthReduction}` : depthReduction;
+                document.getElementById('depthReductionPercent').textContent = depthReductionPercent + '% reduction';
+                document.getElementById('bestFidelity').textContent = data.best.fidelity.toFixed(4);
+            }
+        } catch (error) {
+            console.error('Error loading optimized circuit:', error);
+        }
+    } else {
+        // Try to load current circuit if no best yet
+        try {
+            const optimizedImg = document.getElementById('optimizedCircuitImg');
+            const optimizedPlaceholder = document.getElementById('optimizedCircuitPlaceholder');
+            
+            const currentResponse = await fetch('/api/train/circuit/current');
+            if (currentResponse.ok) {
+                optimizedImg.src = `/api/train/circuit/current?t=${Date.now()}`;
+                optimizedImg.style.display = 'block';
+                optimizedPlaceholder.textContent = 'Current circuit (training in progress...)';
+            }
+        } catch (error) {
+            // Ignore if current circuit not available
+        }
+    }
+}
+
+// Check status every 5 seconds
+statusCheckInterval = setInterval(checkTrainingStatus, 5000);
+</script>
+{% endblock %}

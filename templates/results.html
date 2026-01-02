@@ -1,0 +1,790 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <div class="bg-white rounded-lg shadow-lg p-8">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">Training Results</h1>
+        
+        <!-- File Picker Section -->
+        <div class="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4 mb-6">
+            <h3 class="text-lg font-semibold text-yellow-800 mb-3">Load Results from File</h3>
+            <div class="flex gap-4 items-end">
+                <div class="flex-1">
+                    <label class="block text-gray-700 font-semibold mb-2">Select Training Results File (.json)</label>
+                    <input type="file" id="resultsFilePicker" accept=".json" 
+                           class="w-full border border-gray-300 rounded px-4 py-2">
+                </div>
+                <button onclick="loadResultsFromFile()" 
+                        class="bg-yellow-600 text-white px-6 py-2 rounded hover:bg-yellow-700 font-semibold">
+                    Load File
+                </button>
+            </div>
+        </div>
+        
+        {% if result_files %}
+        <div class="space-y-4 mb-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-3">Results from Default Directory</h2>
+            {% for file in result_files %}
+            <div class="border border-gray-300 rounded-lg p-6 hover:shadow-lg transition-shadow">
+                <h2 class="text-xl font-semibold text-gray-800 mb-3">{{ file }}</h2>
+                <div class="flex space-x-4">
+                    <button onclick="loadResults('{{ file }}')" 
+                            class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                        View Results
+                    </button>
+                    <button onclick="viewPlot('{{ file }}')" 
+                            class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                        View Plot
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-gray-600">No results files found in default directory. Use file picker above to load from other locations.</p>
+        {% endif %}
+    </div>
+    
+    <!-- Results Details View -->
+    <div id="resultsView" class="bg-white rounded-lg shadow-lg p-8 mt-6 hidden">
+        <h2 class="text-2xl font-bold text-gray-800 mb-6">Results Details</h2>
+        <div id="resultsContent" class="text-gray-700"></div>
+        
+        <!-- Training Metrics Plot Section -->
+        <div id="plotSection" class="mt-8 hidden">
+            <h3 class="text-2xl font-bold text-gray-800 mb-4">Training Metrics</h3>
+            <div class="bg-white border-2 border-gray-300 rounded-lg p-4">
+                <img id="trainingPlotImg" src="" alt="Training Metrics Plot" class="w-full h-auto" style="display: none;">
+                <p id="plotPlaceholder" class="text-gray-500 text-center">Loading plot...</p>
+            </div>
+        </div>
+        
+        <!-- Circuit Comparison Section -->
+        <div id="circuitComparison" class="mt-8 hidden">
+            <h3 class="text-2xl font-bold text-gray-800 mb-6">Circuit Comparison</h3>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <!-- Original Circuit -->
+                <div class="border-2 border-blue-300 rounded-lg p-4 bg-blue-50">
+                    <h4 class="text-xl font-semibold text-blue-800 mb-3">Original Circuit</h4>
+                    <div class="bg-white border border-gray-200 rounded-lg p-4 mb-4 min-h-[200px] flex items-center justify-center">
+                        <img id="originalCircuitImg" 
+                             src="" 
+                             alt="Original circuit diagram" 
+                             class="max-w-full h-auto"
+                             style="display: none;">
+                        <p id="originalCircuitPlaceholder" class="text-gray-500 text-center">
+                            Loading...
+                        </p>
+                    </div>
+                    <div id="originalMetrics" class="space-y-2 text-sm text-gray-700">
+                        <p><strong>Gate Count:</strong> <span id="originalGateCount">-</span></p>
+                        <p><strong>Depth:</strong> <span id="originalDepth">-</span></p>
+                    </div>
+                </div>
+                
+                <!-- Optimized Circuit -->
+                <div class="border-2 border-green-300 rounded-lg p-4 bg-green-50">
+                    <h4 class="text-xl font-semibold text-green-800 mb-3">Optimized Circuit</h4>
+                    <div class="bg-white border border-gray-200 rounded-lg p-4 mb-4 min-h-[200px] flex items-center justify-center">
+                        <img id="optimizedCircuitImg" 
+                             src="" 
+                             alt="Optimized circuit diagram" 
+                             class="max-w-full h-auto"
+                             style="display: none;">
+                        <p id="optimizedCircuitPlaceholder" class="text-gray-500 text-center">
+                            Loading...
+                        </p>
+                    </div>
+                    <div id="optimizedMetrics" class="space-y-2 text-sm text-gray-700">
+                        <p><strong>Gate Count:</strong> <span id="optimizedGateCount">-</span></p>
+                        <p><strong>Depth:</strong> <span id="optimizedDepth">-</span></p>
+                        <p><strong>Fidelity:</strong> <span id="optimizedFidelity">-</span></p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Comparison Metrics -->
+            <div id="comparisonMetrics" class="bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-300 rounded-lg p-6">
+                <h4 class="text-xl font-semibold text-purple-800 mb-4">Optimization Results</h4>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-white rounded-lg p-4 shadow">
+                        <p class="text-sm text-gray-600 mb-1">Gate Count Reduction</p>
+                        <p class="text-2xl font-bold text-green-600" id="gateReduction">-</p>
+                        <p class="text-xs text-gray-500" id="gateReductionPercent">-</p>
+                    </div>
+                    <div class="bg-white rounded-lg p-4 shadow">
+                        <p class="text-sm text-gray-600 mb-1">Depth Reduction</p>
+                        <p class="text-2xl font-bold text-blue-600" id="depthReduction">-</p>
+                        <p class="text-xs text-gray-500" id="depthReductionPercent">-</p>
+                    </div>
+                    <div class="bg-white rounded-lg p-4 shadow">
+                        <p class="text-sm text-gray-600 mb-1">Fidelity</p>
+                        <p class="text-2xl font-bold text-purple-600" id="bestFidelity">-</p>
+                        <p class="text-xs text-gray-500">Maintained above threshold</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentResults = null;
+
+async function loadResults(filename) {
+    try {
+        const response = await fetch(`/api/results/${filename}`);
+        const results = await response.json();
+        currentResults = results;
+        
+        // Calculate optimization results if not present
+        let optimizationResults = results.optimization_results;
+        if (!optimizationResults) {
+            const originalGateCount = results.original_circuit.gate_count;
+            const originalDepth = results.original_circuit.depth;
+            
+            let optimizedGateCount, optimizedDepth;
+            if (results.optimized_circuit) {
+                optimizedGateCount = results.optimized_circuit.gate_count;
+                optimizedDepth = results.optimized_circuit.depth;
+            } else if (results.best_metrics) {
+                optimizedGateCount = results.best_metrics.gate_count;
+                optimizedDepth = results.best_metrics.depth;
+            } else {
+                optimizedGateCount = results.training_history.gate_counts[results.training_history.gate_counts.length - 1];
+                optimizedDepth = results.training_history.depths[results.training_history.depths.length - 1];
+            }
+            
+            optimizationResults = {
+                'gate_count_reduction': originalGateCount - optimizedGateCount,
+                'depth_reduction': originalDepth - optimizedDepth,
+                'gate_count_reduction_percent': originalGateCount > 0 ? ((originalGateCount - optimizedGateCount) / originalGateCount * 100) : 0,
+                'depth_reduction_percent': originalDepth > 0 ? ((originalDepth - optimizedDepth) / originalDepth * 100) : 0
+            };
+        }
+        
+        const content = `
+            <h3 class="text-xl font-semibold mb-3">Session: ${results.session_id}</h3>
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <p><strong>Circuit:</strong> ${results.circuit_name}</p>
+                    <p><strong>Original Gate Count:</strong> ${results.original_circuit.gate_count}</p>
+                    <p><strong>Original Depth:</strong> ${results.original_circuit.depth}</p>
+                </div>
+                <div>
+                    <p><strong>Episodes:</strong> ${results.training_history.episode_rewards.length}</p>
+                    <p><strong>Final Gate Count:</strong> ${results.training_history.gate_counts[results.training_history.gate_counts.length - 1]}</p>
+                    <p><strong>Final Depth:</strong> ${results.training_history.depths[results.training_history.depths.length - 1]}</p>
+                </div>
+            </div>
+            <div class="mt-4">
+                <h4 class="font-semibold mb-2">Training Configuration:</h4>
+                <pre class="bg-gray-100 p-4 rounded text-sm">${JSON.stringify(results.config, null, 2)}</pre>
+            </div>
+        `;
+        
+        document.getElementById('resultsContent').innerHTML = content;
+        document.getElementById('resultsView').classList.remove('hidden');
+        
+        // Load plot
+        await loadPlotFromData(results);
+        
+        // Load circuit diagrams
+        await loadCircuitDiagrams(filename, results, optimizationResults);
+    } catch (error) {
+        alert('Error loading results: ' + error.message);
+    }
+}
+
+async function loadCircuitDiagrams(filename, results, optimizationResults = null) {
+    // Load original circuit
+    try {
+        const originalImg = document.getElementById('originalCircuitImg');
+        const originalPlaceholder = document.getElementById('originalCircuitPlaceholder');
+        const originalMetrics = document.getElementById('originalMetrics');
+        
+        originalImg.src = `/api/results/${filename}/circuit/original?t=${Date.now()}`;
+        originalImg.onload = () => {
+            originalImg.style.display = 'block';
+            originalPlaceholder.style.display = 'none';
+        };
+        originalImg.onerror = () => {
+            originalPlaceholder.textContent = 'Error loading circuit diagram';
+        };
+        
+        document.getElementById('originalGateCount').textContent = results.original_circuit.gate_count;
+        document.getElementById('originalDepth').textContent = results.original_circuit.depth;
+    } catch (error) {
+        console.error('Error loading original circuit:', error);
+    }
+    
+    // Load optimized circuit
+    try {
+        const optimizedImg = document.getElementById('optimizedCircuitImg');
+        const optimizedPlaceholder = document.getElementById('optimizedCircuitPlaceholder');
+        const optimizedMetrics = document.getElementById('optimizedMetrics');
+        
+        const response = await fetch(`/api/results/${filename}/circuit/optimized`);
+        if (response.ok) {
+            optimizedImg.src = `/api/results/${filename}/circuit/optimized?t=${Date.now()}`;
+            optimizedImg.onload = () => {
+                optimizedImg.style.display = 'block';
+                optimizedPlaceholder.style.display = 'none';
+            };
+            optimizedImg.onerror = () => {
+                optimizedImg.style.display = 'none';
+                optimizedPlaceholder.textContent = 'Error loading optimized circuit diagram';
+            };
+            
+            // Get best metrics
+            if (results.best_metrics) {
+                document.getElementById('optimizedGateCount').textContent = results.best_metrics.gate_count;
+                document.getElementById('optimizedDepth').textContent = results.best_metrics.depth;
+                document.getElementById('optimizedFidelity').textContent = results.best_metrics.fidelity.toFixed(4);
+                
+                // Update comparison metrics - ALWAYS use saved optimization_results from JSON first
+                const optResults = results.optimization_results || optimizationResults || {
+                    'gate_count_reduction': results.original_circuit.gate_count - results.best_metrics.gate_count,
+                    'depth_reduction': results.original_circuit.depth - results.best_metrics.depth,
+                    'gate_count_reduction_percent': results.original_circuit.gate_count > 0 ? ((results.original_circuit.gate_count - results.best_metrics.gate_count) / results.original_circuit.gate_count * 100) : 0,
+                    'depth_reduction_percent': results.original_circuit.depth > 0 ? ((results.original_circuit.depth - results.best_metrics.depth) / results.original_circuit.depth * 100) : 0
+                };
+                
+                // Update Optimization Results section
+                const gateReductionEl = document.getElementById('gateReduction');
+                const gateReductionPercentEl = document.getElementById('gateReductionPercent');
+                const depthReductionEl = document.getElementById('depthReduction');
+                const depthReductionPercentEl = document.getElementById('depthReductionPercent');
+                const bestFidelityEl = document.getElementById('bestFidelity');
+                
+                if (gateReductionEl) {
+                    gateReductionEl.textContent = optResults.gate_count_reduction;
+                }
+                if (gateReductionPercentEl) {
+                    gateReductionPercentEl.textContent = optResults.gate_count_reduction_percent.toFixed(2) + '%';
+                }
+                if (depthReductionEl) {
+                    depthReductionEl.textContent = optResults.depth_reduction;
+                }
+                if (depthReductionPercentEl) {
+                    depthReductionPercentEl.textContent = optResults.depth_reduction_percent.toFixed(2) + '%';
+                }
+                if (bestFidelityEl) {
+                    bestFidelityEl.textContent = results.best_metrics.fidelity.toFixed(4);
+                }
+                
+                // Show comparison metrics section
+                const comparisonMetrics = document.getElementById('comparisonMetrics');
+                if (comparisonMetrics) {
+                    comparisonMetrics.classList.remove('hidden');
+                }
+            } else {
+                // Use final metrics if best not available
+                const finalGateCount = results.training_history.gate_counts[results.training_history.gate_counts.length - 1];
+                const finalDepth = results.training_history.depths[results.training_history.depths.length - 1];
+                const finalFidelity = results.training_history.fidelities[results.training_history.fidelities.length - 1];
+                
+                document.getElementById('optimizedGateCount').textContent = finalGateCount;
+                document.getElementById('optimizedDepth').textContent = finalDepth;
+                document.getElementById('optimizedFidelity').textContent = finalFidelity.toFixed(4);
+                
+                // Still show comparison even without best metrics - ALWAYS use saved optimization_results from JSON first
+                const optResults = results.optimization_results || optimizationResults || {
+                    'gate_count_reduction': results.original_circuit.gate_count - finalGateCount,
+                    'depth_reduction': results.original_circuit.depth - finalDepth,
+                    'gate_count_reduction_percent': results.original_circuit.gate_count > 0 ? ((results.original_circuit.gate_count - finalGateCount) / results.original_circuit.gate_count * 100) : 0,
+                    'depth_reduction_percent': results.original_circuit.depth > 0 ? ((results.original_circuit.depth - finalDepth) / results.original_circuit.depth * 100) : 0
+                };
+                
+                // Update Optimization Results section
+                const gateReductionEl = document.getElementById('gateReduction');
+                const gateReductionPercentEl = document.getElementById('gateReductionPercent');
+                const depthReductionEl = document.getElementById('depthReduction');
+                const depthReductionPercentEl = document.getElementById('depthReductionPercent');
+                const bestFidelityEl = document.getElementById('bestFidelity');
+                
+                if (gateReductionEl) {
+                    gateReductionEl.textContent = optResults.gate_count_reduction;
+                }
+                if (gateReductionPercentEl) {
+                    gateReductionPercentEl.textContent = optResults.gate_count_reduction_percent.toFixed(2) + '%';
+                }
+                if (depthReductionEl) {
+                    depthReductionEl.textContent = optResults.depth_reduction;
+                }
+                if (depthReductionPercentEl) {
+                    depthReductionPercentEl.textContent = optResults.depth_reduction_percent.toFixed(2) + '%';
+                }
+                if (bestFidelityEl) {
+                    bestFidelityEl.textContent = finalFidelity.toFixed(4);
+                }
+                
+                // Show comparison metrics section
+                const comparisonMetrics = document.getElementById('comparisonMetrics');
+                if (comparisonMetrics) {
+                    comparisonMetrics.classList.remove('hidden');
+                }
+            }
+        } else {
+            // No optimized circuit file - show message but still show metrics
+            optimizedImg.style.display = 'none';
+            optimizedPlaceholder.textContent = 'No optimized circuit saved. Training may not have found a valid optimization.';
+            
+            // Still show final metrics
+            const finalGateCount = results.training_history.gate_counts[results.training_history.gate_counts.length - 1];
+            const finalDepth = results.training_history.depths[results.training_history.depths.length - 1];
+            const finalFidelity = results.training_history.fidelities[results.training_history.fidelities.length - 1];
+            
+            document.getElementById('optimizedGateCount').textContent = finalGateCount;
+            document.getElementById('optimizedDepth').textContent = finalDepth;
+            document.getElementById('optimizedFidelity').textContent = finalFidelity.toFixed(4);
+            
+            // Update comparison metrics - ALWAYS use saved optimization_results from JSON first
+            const optResults = results.optimization_results || optimizationResults || {
+                'gate_count_reduction': results.original_circuit.gate_count - finalGateCount,
+                'depth_reduction': results.original_circuit.depth - finalDepth,
+                'gate_count_reduction_percent': results.original_circuit.gate_count > 0 ? ((results.original_circuit.gate_count - finalGateCount) / results.original_circuit.gate_count * 100) : 0,
+                'depth_reduction_percent': results.original_circuit.depth > 0 ? ((results.original_circuit.depth - finalDepth) / results.original_circuit.depth * 100) : 0
+            };
+            
+            // Update Optimization Results section
+            const gateReductionEl = document.getElementById('gateReduction');
+            const gateReductionPercentEl = document.getElementById('gateReductionPercent');
+            const depthReductionEl = document.getElementById('depthReduction');
+            const depthReductionPercentEl = document.getElementById('depthReductionPercent');
+            const bestFidelityEl = document.getElementById('bestFidelity');
+            
+            if (gateReductionEl) {
+                gateReductionEl.textContent = optResults.gate_count_reduction;
+            }
+            if (gateReductionPercentEl) {
+                gateReductionPercentEl.textContent = optResults.gate_count_reduction_percent.toFixed(2) + '%';
+            }
+            if (depthReductionEl) {
+                depthReductionEl.textContent = optResults.depth_reduction;
+            }
+            if (depthReductionPercentEl) {
+                depthReductionPercentEl.textContent = optResults.depth_reduction_percent.toFixed(2) + '%';
+            }
+            if (bestFidelityEl) {
+                bestFidelityEl.textContent = finalFidelity.toFixed(4);
+            }
+            
+            // Show comparison metrics section
+            const comparisonMetrics = document.getElementById('comparisonMetrics');
+            if (comparisonMetrics) {
+                comparisonMetrics.classList.remove('hidden');
+            }
+        }
+        
+        // Show circuit comparison section
+        document.getElementById('circuitComparison').classList.remove('hidden');
+    } catch (error) {
+        console.error('Error loading optimized circuit:', error);
+        document.getElementById('optimizedCircuitPlaceholder').textContent = 'Error loading optimized circuit';
+    }
+    
+    // Show circuit comparison section
+    document.getElementById('circuitComparison').classList.remove('hidden');
+}
+
+function viewPlot(filename) {
+    window.open(`/api/results/${filename}/plot`, '_blank');
+}
+
+function testCircuit(filename) {
+    // Store filename in sessionStorage and redirect to test page
+    sessionStorage.setItem('testCircuitFile', filename);
+    window.location.href = '/test';
+}
+
+let currentLoadedFile = null;
+
+async function loadResultsFromFile() {
+    const fileInput = document.getElementById('resultsFilePicker');
+    if (!fileInput.files.length) {
+        alert('Please select a results file');
+        return;
+    }
+    
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+    
+    reader.onload = function(e) {
+        try {
+            const results = JSON.parse(e.target.result);
+            currentLoadedFile = file.name;
+            // Display results
+            displayResultsFromData(results, file.name);
+        } catch (error) {
+            alert('Error parsing JSON file: ' + error.message);
+        }
+    };
+    
+    reader.readAsText(file);
+}
+
+function viewPlotForLoadedFile() {
+    if (!currentLoadedFile) {
+        alert('Please load a results file first');
+        return;
+    }
+    
+    // Create a temporary results file reference
+    const fileInput = document.getElementById('resultsFilePicker');
+    if (fileInput.files.length > 0) {
+        // Use the loaded file data
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            try {
+                const results = JSON.parse(e.target.result);
+                // Generate plot from loaded data
+                viewPlotFromData(results);
+            } catch (error) {
+                alert('Error parsing JSON file: ' + error.message);
+            }
+        };
+        
+        reader.readAsText(file);
+    }
+}
+
+async function displayResultsFromData(results, filename) {
+    currentResults = results;
+    
+    // Show view plot button if it exists
+    const viewPlotBtn = document.getElementById('viewPlotBtn');
+    if (viewPlotBtn) {
+        viewPlotBtn.classList.remove('hidden');
+    }
+    
+    // Calculate optimization results if not present
+    let optimizationResults = results.optimization_results;
+    if (!optimizationResults) {
+        // Calculate from available data
+        const originalGateCount = results.original_circuit.gate_count;
+        const originalDepth = results.original_circuit.depth;
+        
+        let optimizedGateCount, optimizedDepth;
+        if (results.optimized_circuit) {
+            optimizedGateCount = results.optimized_circuit.gate_count;
+            optimizedDepth = results.optimized_circuit.depth;
+        } else if (results.best_metrics) {
+            optimizedGateCount = results.best_metrics.gate_count;
+            optimizedDepth = results.best_metrics.depth;
+        } else {
+            // Use final values from training history
+            optimizedGateCount = results.training_history.gate_counts[results.training_history.gate_counts.length - 1];
+            optimizedDepth = results.training_history.depths[results.training_history.depths.length - 1];
+        }
+        
+        optimizationResults = {
+            'gate_count_reduction': originalGateCount - optimizedGateCount,
+            'depth_reduction': originalDepth - optimizedDepth,
+            'gate_count_reduction_percent': originalGateCount > 0 ? ((originalGateCount - optimizedGateCount) / originalGateCount * 100) : 0,
+            'depth_reduction_percent': originalDepth > 0 ? ((originalDepth - optimizedDepth) / originalDepth * 100) : 0
+        };
+    }
+    
+    let optimizedInfo = '';
+    if (results.optimized_circuit) {
+        optimizedInfo = `
+            <div class="mt-4 p-4 bg-green-50 rounded-lg">
+                <h4 class="font-semibold mb-2 text-green-800">Optimized Circuit</h4>
+                <p><strong>Gate Count:</strong> ${results.optimized_circuit.gate_count}</p>
+                <p><strong>Depth:</strong> ${results.optimized_circuit.depth}</p>
+                <p><strong>Fidelity:</strong> ${results.optimized_circuit.fidelity.toFixed(4)}</p>
+            </div>
+        `;
+    }
+    
+    const content = `
+        <h3 class="text-xl font-semibold mb-3">Session: ${results.session_id || 'Unknown'}</h3>
+        <p class="text-sm text-gray-600 mb-3">File: ${filename}</p>
+        <div class="grid grid-cols-2 gap-4 mb-4">
+            <div>
+                <p><strong>Circuit:</strong> ${results.circuit_name}</p>
+                <p><strong>Original Gate Count:</strong> ${results.original_circuit.gate_count}</p>
+                <p><strong>Original Depth:</strong> ${results.original_circuit.depth}</p>
+            </div>
+            <div>
+                <p><strong>Episodes:</strong> ${results.training_history.episode_rewards.length}</p>
+                <p><strong>Final Gate Count:</strong> ${results.training_history.gate_counts[results.training_history.gate_counts.length - 1]}</p>
+                <p><strong>Final Depth:</strong> ${results.training_history.depths[results.training_history.depths.length - 1]}</p>
+            </div>
+        </div>
+        ${optimizedInfo}
+        <div class="mt-4">
+            <h4 class="font-semibold mb-2">Training Configuration:</h4>
+            <pre class="bg-gray-100 p-4 rounded text-sm">${JSON.stringify(results.config, null, 2)}</pre>
+        </div>
+    `;
+    
+    document.getElementById('resultsContent').innerHTML = content;
+    document.getElementById('resultsView').classList.remove('hidden');
+    
+    // Load plot
+    await loadPlotFromData(results);
+    
+    // Try to load circuit diagrams (may not work for custom files)
+    await loadCircuitDiagramsFromData(results, optimizationResults);
+}
+
+async function loadPlotFromData(results) {
+    // Generate plot from loaded results data and display in page
+    if (!results.training_history) {
+        const plotPlaceholder = document.getElementById('plotPlaceholder');
+        if (plotPlaceholder) {
+            plotPlaceholder.textContent = 'No training history data available';
+        }
+        return;
+    }
+    
+    const plotSection = document.getElementById('plotSection');
+    const plotImg = document.getElementById('trainingPlotImg');
+    const plotPlaceholder = document.getElementById('plotPlaceholder');
+    
+    if (!plotSection || !plotImg || !plotPlaceholder) {
+        return;
+    }
+    
+    plotSection.classList.remove('hidden');
+    
+    // Send data to API endpoint to generate plot
+    let response = await fetch('/api/results/plot-from-data', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(results)
+    })
+    if (response.ok) { 
+        let blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        plotImg.src = url;
+        plotImg.onload = () => {
+            plotImg.style.display = 'block';
+            plotPlaceholder.style.display = 'none';
+        };
+        plotImg.onerror = () => {
+            plotPlaceholder.textContent = 'Error loading plot';
+        };
+    }
+    else {
+        throw new Error('Failed to generate plot');
+    }
+    // .then(async (response) => {
+    //     if (response.ok) {
+    //         let blob = await response.blob();
+    //         const url = URL.createObjectURL(blob);
+    //         plotImg.src = url;
+    //         plotImg.onload = () => {
+    //             plotImg.style.display = 'block';
+    //             plotPlaceholder.style.display = 'none';
+    //         };
+    //         plotImg.onerror = () => {
+    //             plotPlaceholder.textContent = 'Error loading plot';
+    //         };
+    //     } else {
+    //         throw new Error('Failed to generate plot');
+    //     }
+    // })
+    // .catch(error => {
+    //     plotPlaceholder.textContent = 'Error generating plot: ' + error.message;
+    //     console.error('Plot generation error:', error);
+    // });
+}
+ 
+
+function viewPlotFromData(results) {
+    // Open plot in new window (for the button)
+    if (!results.training_history) {
+        alert('No training history data available');
+        return;
+    }
+    
+    // Send data to API endpoint to generate plot
+    try {
+        fetch('/api/results/plot-from-data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(results)
+        })
+        .then(response => {
+            if (response.ok) {
+                return response.blob();
+            }
+            throw new Error('Failed to generate plot');
+        })
+        .then(blob => {
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+        })
+        .catch(error => {
+            alert('Error generating plot: ' + error.message);
+        });
+    } catch (error) {
+        alert('Error generating plot: ' + error.message);
+    }
+}
+
+async function loadCircuitDiagramsFromData(results, optimizationResults = null) {
+    // For custom files, we may not have diagrams, but try to load original circuit
+    try {
+        const originalImg = document.getElementById('originalCircuitImg');
+        const originalPlaceholder = document.getElementById('originalCircuitPlaceholder');
+        const optimizedImg = document.getElementById('optimizedCircuitImg');
+        const optimizedPlaceholder = document.getElementById('optimizedCircuitPlaceholder');
+        
+        if (!originalImg || !originalPlaceholder) {
+            return; // Elements not found
+        }
+        
+        // Load original circuit
+        const circuitName = results.circuit_name;
+        if (circuitName && !circuitName.startsWith('custom_')) {
+            originalImg.src = `/api/circuit/${circuitName}/diagram?t=${Date.now()}`;
+            originalImg.onload = () => {
+                originalImg.style.display = 'block';
+                originalPlaceholder.style.display = 'none';
+            };
+        } else if (results.original_circuit && results.original_circuit.qasm) {
+            // Try to generate diagram from QASM
+            try {
+                const response = await fetch('/api/circuit/from-qasm', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({qasm: results.original_circuit.qasm})
+                });
+                if (response.ok) {
+                    const blob = await response.blob();
+                    originalImg.src = URL.createObjectURL(blob);
+                    originalImg.onload = () => {
+                        originalImg.style.display = 'block';
+                        originalPlaceholder.style.display = 'none';
+                    };
+                } else {
+                    originalPlaceholder.textContent = 'Custom circuit - diagram not available';
+                }
+            } catch (e) {
+                originalPlaceholder.textContent = 'Custom circuit - diagram not available';
+            }
+        } else {
+            originalPlaceholder.textContent = 'Custom circuit - diagram not available';
+        }
+        
+        // Load optimized circuit if available
+        if (results.optimized_circuit && results.optimized_circuit.qasm && optimizedImg && optimizedPlaceholder) {
+            try {
+                const response = await fetch('/api/circuit/from-qasm', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({qasm: results.optimized_circuit.qasm})
+                });
+                if (response.ok) {
+                    const blob = await response.blob();
+                    optimizedImg.src = URL.createObjectURL(blob);
+                    optimizedImg.onload = () => {
+                        optimizedImg.style.display = 'block';
+                        optimizedPlaceholder.style.display = 'none';
+                    };
+                } else {
+                    optimizedPlaceholder.textContent = 'Optimized circuit - diagram not available';
+                }
+            } catch (e) {
+                optimizedPlaceholder.textContent = 'Optimized circuit - diagram not available';
+            }
+        } else if (optimizedPlaceholder) {
+            optimizedPlaceholder.textContent = 'No optimized circuit available';
+        }
+        
+        const originalGateCountEl = document.getElementById('originalGateCount');
+        const originalDepthEl = document.getElementById('originalDepth');
+        if (originalGateCountEl) originalGateCountEl.textContent = results.original_circuit.gate_count;
+        if (originalDepthEl) originalDepthEl.textContent = results.original_circuit.depth;
+        
+        if (results.optimized_circuit) {
+            const optimizedGateCountEl = document.getElementById('optimizedGateCount');
+            const optimizedDepthEl = document.getElementById('optimizedDepth');
+            const optimizedFidelityEl = document.getElementById('optimizedFidelity');
+            if (optimizedGateCountEl) optimizedGateCountEl.textContent = results.optimized_circuit.gate_count;
+            if (optimizedDepthEl) optimizedDepthEl.textContent = results.optimized_circuit.depth;
+            if (optimizedFidelityEl) optimizedFidelityEl.textContent = results.optimized_circuit.fidelity.toFixed(4);
+        }
+        
+        // Update optimization results - use provided or calculate
+        const optResults = optimizationResults || results.optimization_results;
+        if (optResults) {
+            const gateReductionEl = document.getElementById('gateReduction');
+            const gateReductionPercentEl = document.getElementById('gateReductionPercent');
+            const depthReductionEl = document.getElementById('depthReduction');
+            const depthReductionPercentEl = document.getElementById('depthReductionPercent');
+            
+            if (gateReductionEl) gateReductionEl.textContent = optResults.gate_count_reduction;
+            if (gateReductionPercentEl) gateReductionPercentEl.textContent = optResults.gate_count_reduction_percent.toFixed(2) + '%';
+            if (depthReductionEl) depthReductionEl.textContent = optResults.depth_reduction;
+            if (depthReductionPercentEl) depthReductionPercentEl.textContent = optResults.depth_reduction_percent.toFixed(2) + '%';
+        } else {
+            // Calculate from available data
+            const originalGateCount = results.original_circuit.gate_count;
+            const originalDepth = results.original_circuit.depth;
+            
+            let optimizedGateCount, optimizedDepth;
+            if (results.optimized_circuit) {
+                optimizedGateCount = results.optimized_circuit.gate_count;
+                optimizedDepth = results.optimized_circuit.depth;
+            } else if (results.best_metrics) {
+                optimizedGateCount = results.best_metrics.gate_count;
+                optimizedDepth = results.best_metrics.depth;
+            } else {
+                optimizedGateCount = results.training_history.gate_counts[results.training_history.gate_counts.length - 1];
+                optimizedDepth = results.training_history.depths[results.training_history.depths.length - 1];
+            }
+            
+            const gateReduction = originalGateCount - optimizedGateCount;
+            const depthReduction = originalDepth - optimizedDepth;
+            const gateReductionPercent = originalGateCount > 0 ? ((gateReduction / originalGateCount) * 100) : 0;
+            const depthReductionPercent = originalDepth > 0 ? ((depthReduction / originalDepth) * 100) : 0;
+            
+            const gateReductionEl = document.getElementById('gateReduction');
+            const gateReductionPercentEl = document.getElementById('gateReductionPercent');
+            const depthReductionEl = document.getElementById('depthReduction');
+            const depthReductionPercentEl = document.getElementById('depthReductionPercent');
+            
+            if (gateReductionEl) gateReductionEl.textContent = gateReduction;
+            if (gateReductionPercentEl) gateReductionPercentEl.textContent = gateReductionPercent.toFixed(2) + '%';
+            if (depthReductionEl) depthReductionEl.textContent = depthReduction;
+            if (depthReductionPercentEl) depthReductionPercentEl.textContent = depthReductionPercent.toFixed(2) + '%';
+        }
+        
+        // Update fidelity
+        let fidelity = null;
+        if (results.optimized_circuit) {
+            fidelity = results.optimized_circuit.fidelity;
+        } else if (results.best_metrics) {
+            fidelity = results.best_metrics.fidelity;
+        } else if (results.training_history.fidelities && results.training_history.fidelities.length > 0) {
+            fidelity = results.training_history.fidelities[results.training_history.fidelities.length - 1];
+        }
+        
+        if (fidelity !== null) {
+            const bestFidelityEl = document.getElementById('bestFidelity');
+            if (bestFidelityEl) bestFidelityEl.textContent = fidelity.toFixed(4);
+        }
+    } catch (error) {
+        console.error('Error loading circuit diagrams:', error);
+    }
+    
+    // Show circuit comparison section
+    const circuitComparison = document.getElementById('circuitComparison');
+    if (circuitComparison) {
+        circuitComparison.classList.remove('hidden');
+    }
+}
+</script>
+{% endblock %}

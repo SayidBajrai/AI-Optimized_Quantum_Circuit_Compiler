@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="bg-white rounded-lg shadow-lg p-8 mb-8">
+        <h1 class="text-3xl font-bold text-gray-800 mb-4">AI-Optimized Quantum Circuit Compiler</h1>
+        <p class="text-gray-600 text-lg mb-6">
+            A reinforcement learning–based quantum circuit compiler that automatically optimizes 
+            quantum circuits by reducing gate count and circuit depth while preserving quantum state fidelity.
+        </p>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div class="bg-blue-50 p-6 rounded-lg">
+                <h2 class="text-xl font-semibold text-blue-800 mb-3">Key Features</h2>
+                <ul class="space-y-2 text-gray-700">
+                    <li>✓ Reinforcement Learning–driven optimization</li>
+                    <li>✓ Fidelity-preserving gate reduction</li>
+                    <li>✓ Custom Gymnasium environment</li>
+                    <li>✓ Qiskit-based quantum simulation</li>
+                    <li>✓ Web interface with real-time monitoring</li>
+                </ul>
+            </div>
+            
+            <div class="bg-green-50 p-6 rounded-lg">
+                <h2 class="text-xl font-semibold text-green-800 mb-3">Optimization Goals</h2>
+                <ul class="space-y-2 text-gray-700">
+                    <li>✓ Minimize gate count</li>
+                    <li>✓ Minimize circuit depth</li>
+                    <li>✓ Preserve fidelity (≥99%)</li>
+                    <li>✓ Learn optimization strategies</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="bg-gray-50 p-6 rounded-lg">
+            <h2 class="text-xl font-semibold text-gray-800 mb-3">Quick Start</h2>
+            <ol class="list-decimal list-inside space-y-2 text-gray-700">
+                <li>Select a quantum circuit from the <a href="/circuit" class="text-blue-600 hover:underline">Circuits</a> page</li>
+                <li>Configure training parameters on the <a href="/train" class="text-blue-600 hover:underline">Train</a> page</li>
+                <li>Start training and monitor progress</li>
+                <li>View results and visualizations on the <a href="/results" class="text-blue-600 hover:underline">Results</a> page</li>
+            </ol>
+        </div>
+    </div>
+    
+    <div class="bg-white rounded-lg shadow-lg p-8">
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">System Architecture</h2>
+        <div class="bg-gray-50 p-4 rounded font-mono text-sm">
+            <pre>User (Web UI - Flask + Tailwind)
+        |
+        v
+Flask Backend API
+        |
+        v
+RL Training Engine (PyTorch)
+        |
+        v
+Custom Gym Environment
+        |
+        v
+Quantum Circuit Simulator (Qiskit)</pre>
+        </div>
+    </div>
+</div>
+{% endblock %}

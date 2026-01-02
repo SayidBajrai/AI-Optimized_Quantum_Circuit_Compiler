@@ -1,0 +1,646 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <div class="bg-white rounded-lg shadow-lg p-8 mb-6">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">Test Circuit</h1>
+        
+        <div id="circuitSelector" class="mb-6">
+            <div class="bg-blue-50 border-2 border-blue-300 rounded-lg p-4 mb-4">
+                <h3 class="text-lg font-semibold text-blue-800 mb-3">Circuit Source</h3>
+                <div class="space-y-4">
+                    <div id="customCircuitSection">
+                        <label class="block text-gray-700 font-semibold mb-2">Upload Custom Circuit (.qasm)</label>
+                        <input type="file" id="customCircuitFile" accept=".qasm" 
+                               class="w-full border border-gray-300 rounded px-4 py-2 mb-2">
+                        <button onclick="loadCustomCircuit()" 
+                                class="w-full bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 mb-4">
+                            Load Custom Circuit
+                        </button>
+                        <p class="text-xs text-gray-500 mb-4">Upload a QASM file to test your circuit</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="testView" class="hidden">
+            <!-- Circuit Display -->
+            <div class="mb-6">
+                <div class="border-2 border-blue-300 rounded-lg p-4 bg-blue-50">
+                    <h3 class="text-xl font-semibold text-blue-800 mb-3">Circuit</h3>
+                    <div class="bg-white border border-gray-200 rounded-lg p-4 mb-4 min-h-[200px] flex items-center justify-center">
+                        <img id="circuitImg" 
+                             src="" 
+                             alt="Circuit diagram" 
+                             class="max-w-full h-auto"
+                             style="display: none;">
+                        <p id="circuitPlaceholder" class="text-gray-500 text-center">Loading...</p>
+                    </div>
+                    <div id="circuitInfo" class="text-sm text-gray-700"></div>
+                </div>
+            </div>
+            
+            <!-- Test Controls -->
+            <div class="bg-gray-50 border-2 border-gray-300 rounded-lg p-6 mb-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-4">Test Configuration</h3>
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 font-semibold mb-2">Input State (per qubit)</label>
+                    <div id="inputStateContainer" class="space-y-3">
+                        <p class="text-sm text-gray-500">Load a circuit to configure input states</p>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 font-semibold mb-2">Number of Shots</label>
+                    <input type="number" id="numShots" value="1024" min="1" max="10000" 
+                           class="w-full border border-gray-300 rounded px-4 py-2">
+                </div>
+                
+                <button onclick="runTest()" 
+                        class="bg-green-600 text-white px-6 py-3 rounded hover:bg-green-700 font-semibold">
+                    Run Test
+                </button>
+            </div>
+            
+            <!-- Test Results -->
+            <div id="testResults" class="hidden">
+                <div class="bg-white border-2 border-purple-300 rounded-lg p-6">
+                    <h3 class="text-xl font-semibold text-purple-800 mb-4">Test Results</h3>
+                    
+                    <div class="mb-6">
+                        <h4 class="font-semibold text-gray-800 mb-4">Measurement Counts</h4>
+                        <div class="bg-gray-50 p-4 rounded mb-2">
+                            <canvas id="measurementCountsChart" width="400" height="200"></canvas>
+                        </div>
+                        <div id="measurementCountsText" class="bg-gray-100 p-2 rounded font-mono text-xs max-h-32 overflow-y-auto hidden"></div>
+                        <button onclick="toggleMeasurementText()" class="mt-2 text-sm text-blue-600 hover:underline">
+                            Show/Hide Raw Data
+                        </button>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <h4 class="font-semibold text-gray-800 mb-4">State Vector</h4>
+                        <div class="bg-gray-50 p-4 rounded mb-2">
+                            <canvas id="stateVectorChart" width="400" height="300"></canvas>
+                        </div>
+                        <div class="flex justify-between items-center mb-2">
+                            <h5 class="font-semibold text-sm text-gray-700">State Amplitudes</h5>
+                            <button onclick="toggleStateText()" class="text-xs text-blue-600 hover:underline">
+                                Show/Hide Raw Data
+                            </button>
+                        </div>
+                        <div id="stateText" class="bg-gray-100 p-2 rounded font-mono text-xs max-h-32 overflow-y-auto hidden"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentResultsFile = null;
+let customCircuitPath = null;
+let measurementChart = null;
+let stateVectorChart = null;
+
+// Load results files on page load
+window.addEventListener('DOMContentLoaded', () => {
+    // Check if redirected from results page - this functionality is no longer available
+    // but we'll clear the session storage if it exists
+    const testFile = sessionStorage.getItem('testCircuitFile');
+    if (testFile) {
+        sessionStorage.removeItem('testCircuitFile');
+    }
+});
+
+async function loadCircuit() {
+    const filename = document.getElementById('resultsFileSelect').value;
+    if (!filename) {
+        alert('Please select a results file');
+        return;
+    }
+    
+    currentResultsFile = filename;
+    customCircuitPath = null; // Clear custom circuit
+    
+    try {
+        // Load results data
+        const response = await fetch(`/api/results/${filename}`);
+        const results = await response.json();
+        
+        // Load circuit diagram (use optimized if available, otherwise original)
+        const circuitImg = document.getElementById('circuitImg');
+        const circuitPlaceholder = document.getElementById('circuitPlaceholder');
+        const circuitInfo = document.getElementById('circuitInfo');
+        
+        // Try optimized first, fallback to original
+        const optimizedResponse = await fetch(`/api/results/${filename}/circuit/optimized`);
+        if (optimizedResponse.ok) {
+            circuitImg.src = `/api/results/${filename}/circuit/optimized?t=${Date.now()}`;
+            circuitImg.onload = () => {
+                circuitImg.style.display = 'block';
+                circuitPlaceholder.style.display = 'none';
+            };
+            
+            if (results.best_metrics) {
+                circuitInfo.innerHTML = `
+                    <p><strong>Gate Count:</strong> ${results.best_metrics.gate_count}</p>
+                    <p><strong>Depth:</strong> ${results.best_metrics.depth}</p>
+                    <p><strong>Circuit:</strong> ${results.circuit_name}</p>
+                `;
+            } else {
+                const finalGateCount = results.training_history.gate_counts[results.training_history.gate_counts.length - 1];
+                const finalDepth = results.training_history.depths[results.training_history.depths.length - 1];
+                circuitInfo.innerHTML = `
+                    <p><strong>Gate Count:</strong> ${finalGateCount}</p>
+                    <p><strong>Depth:</strong> ${finalDepth}</p>
+                    <p><strong>Circuit:</strong> ${results.circuit_name}</p>
+                `;
+            }
+        } else {
+            // Fallback to original
+            circuitImg.src = `/api/results/${filename}/circuit/original?t=${Date.now()}`;
+            circuitImg.onload = () => {
+                circuitImg.style.display = 'block';
+                circuitPlaceholder.style.display = 'none';
+            };
+            
+            circuitInfo.innerHTML = `
+                <p><strong>Gate Count:</strong> ${results.original_circuit.gate_count}</p>
+                <p><strong>Depth:</strong> ${results.original_circuit.depth}</p>
+                <p><strong>Circuit:</strong> ${results.circuit_name}</p>
+            `;
+        }
+        
+        // Update input state controls based on circuit qubits
+        // We need to get the actual circuit to know num_qubits
+        // For now, try to load the circuit to get num_qubits
+        try {
+            // Try to get optimized circuit first, then original
+            const optimizedResponse = await fetch(`/api/results/${filename}/circuit/optimized`);
+            if (optimizedResponse.ok) {
+                // Load circuit from QASM to get num_qubits
+                const bestCircuitFile = results.best_circuit_file;
+                if (bestCircuitFile) {
+                    const circuitResponse = await fetch(`/api/results/${filename}`);
+                    // We'll need to parse QASM or get it from results
+                    if (results.optimized_circuit && results.optimized_circuit.qasm) {
+                        // Parse QASM to get num_qubits
+                        const qasmMatch = results.optimized_circuit.qasm.match(/qreg\s+\w+\[(\d+)\]/);
+                        if (qasmMatch) {
+                            updateInputStateControls(parseInt(qasmMatch[1]));
+                        } else {
+                            // Fallback: try to infer from circuit name
+                            const match = results.circuit_name.match(/_(\d+)$/);
+                            updateInputStateControls(match ? parseInt(match[1]) : 3);
+                        }
+                    } else {
+                        // Fallback: try to infer from circuit name
+                        const match = results.circuit_name.match(/_(\d+)$/);
+                        updateInputStateControls(match ? parseInt(match[1]) : 3);
+                    }
+                } else {
+                    // Fallback: try to infer from circuit name
+                    const match = results.circuit_name.match(/_(\d+)$/);
+                    updateInputStateControls(match ? parseInt(match[1]) : 3);
+                }
+            } else {
+                // Use original circuit - try to parse QASM
+                if (results.original_circuit && results.original_circuit.qasm) {
+                    const qasmMatch = results.original_circuit.qasm.match(/qreg\s+\w+\[(\d+)\]/);
+                    if (qasmMatch) {
+                        updateInputStateControls(parseInt(qasmMatch[1]));
+                    } else {
+                        const match = results.circuit_name.match(/_(\d+)$/);
+                        updateInputStateControls(match ? parseInt(match[1]) : 3);
+                    }
+                } else {
+                    const match = results.circuit_name.match(/_(\d+)$/);
+                    updateInputStateControls(match ? parseInt(match[1]) : 3);
+                }
+            }
+        } catch (e) {
+            // Fallback: try to infer from circuit name
+            const match = results.circuit_name.match(/_(\d+)$/);
+            updateInputStateControls(match ? parseInt(match[1]) : 3);
+        }
+        
+        document.getElementById('testView').classList.remove('hidden');
+    } catch (error) {
+        alert('Error loading circuit: ' + error.message);
+    }
+}
+
+async function loadCustomCircuit() {
+    const fileInput = document.getElementById('customCircuitFile');
+    if (!fileInput.files.length) {
+        alert('Please select a .qasm file');
+        return;
+    }
+    
+    const file = fileInput.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        const response = await fetch('/api/circuit/upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            customCircuitPath = result.filepath;
+            currentResultsFile = null; // Clear results file
+            
+            // Display circuit info
+            const circuitImg = document.getElementById('circuitImg');
+            const circuitPlaceholder = document.getElementById('circuitPlaceholder');
+            const circuitInfo = document.getElementById('circuitInfo');
+            
+            circuitPlaceholder.textContent = 'Custom circuit loaded';
+            
+            circuitInfo.innerHTML = `
+                <p><strong>Gate Count:</strong> ${result.gate_count}</p>
+                <p><strong>Depth:</strong> ${result.depth}</p>
+                <p><strong>Qubits:</strong> ${result.num_qubits}</p>
+                <p><strong>File:</strong> ${result.filename}</p>
+            `;
+            
+            // Try to load diagram if available
+            if (result.diagram_path) {
+                circuitImg.src = `/api/circuit/custom/${result.filename}/diagram?t=${Date.now()}`;
+                circuitImg.onload = () => {
+                    circuitImg.style.display = 'block';
+                    circuitPlaceholder.style.display = 'none';
+                };
+            }
+            
+            // Update input state controls based on circuit qubits
+            updateInputStateControls(result.num_qubits);
+            
+            document.getElementById('testView').classList.remove('hidden');
+        } else {
+            alert('Error uploading circuit: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error loading custom circuit: ' + error.message);
+    }
+}
+
+function updateInputStateControls(numQubits) {
+    const container = document.getElementById('inputStateContainer');
+    container.innerHTML = '';
+    
+    for (let i = 0; i < numQubits; i++) {
+        const qubitDiv = document.createElement('div');
+        qubitDiv.className = 'border border-gray-300 rounded p-3 bg-white';
+        qubitDiv.innerHTML = `
+            <label class="block text-sm font-semibold text-gray-700 mb-2">Qubit ${i}</label>
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <label class="block text-xs text-gray-600 mb-1">State Type</label>
+                    <select id="qubitStateType_${i}" class="w-full border border-gray-300 rounded px-2 py-1 text-sm" 
+                            onchange="toggleCustomState(${i})">
+                        <option value="0">|0⟩</option>
+                        <option value="1">|1⟩</option>
+                        <option value="+">|+⟩</option>
+                        <option value="-">|-⟩</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                </div>
+                <div id="customState_${i}" class="hidden">
+                    <label class="block text-xs text-gray-600 mb-1">Custom (real, imag)</label>
+                    <div class="flex gap-1">
+                        <input type="number" id="qubitStateReal_${i}" step="0.01" value="1" 
+                               class="w-1/2 border border-gray-300 rounded px-2 py-1 text-sm" placeholder="real">
+                        <input type="number" id="qubitStateImag_${i}" step="0.01" value="0" 
+                               class="w-1/2 border border-gray-300 rounded px-2 py-1 text-sm" placeholder="imag">
+                    </div>
+                </div>
+            </div>
+        `;
+        container.appendChild(qubitDiv);
+    }
+}
+
+function toggleCustomState(qubitIndex) {
+    const stateType = document.getElementById(`qubitStateType_${qubitIndex}`).value;
+    const customDiv = document.getElementById(`customState_${qubitIndex}`);
+    if (stateType === 'custom') {
+        customDiv.classList.remove('hidden');
+    } else {
+        customDiv.classList.add('hidden');
+    }
+}
+
+function getInputStates() {
+    const container = document.getElementById('inputStateContainer');
+    const qubitDivs = container.querySelectorAll('[id^="qubitStateType_"]');
+    const states = [];
+    
+    qubitDivs.forEach((select, index) => {
+        const stateType = select.value;
+        if (stateType === 'custom') {
+            const real = parseFloat(document.getElementById(`qubitStateReal_${index}`).value) || 0;
+            const imag = parseFloat(document.getElementById(`qubitStateImag_${index}`).value) || 0;
+            states.push({
+                type: 'custom',
+                real: real,
+                imag: imag
+            });
+        } else {
+            states.push({
+                type: stateType
+            });
+        }
+    });
+    
+    return states;
+}
+
+async function runTest() {
+    if (!currentResultsFile && !customCircuitPath) {
+        alert('Please load a circuit first (from results or upload custom)');
+        return;
+    }
+    
+    const inputStates = getInputStates();
+    const numShots = parseInt(document.getElementById('numShots').value);
+    
+    try {
+        const requestBody = {
+            input_states: inputStates,
+            num_shots: numShots
+        };
+        
+        if (currentResultsFile) {
+            requestBody.results_file = currentResultsFile;
+        } else if (customCircuitPath) {
+            requestBody.custom_circuit_file = customCircuitPath;
+        }
+        
+        const response = await fetch('/api/test/circuit', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        });
+        
+        const results = await response.json();
+        
+        if (response.ok) {
+            // Display measurement counts chart
+            displayMeasurementCountsChart(results.measurement_counts);
+            
+            // Display state vector chart
+            if (results.state_magnitudes) {
+                displayStateVectorChart(results.state_magnitudes, results.state);
+            } else {
+                // Fallback to parsing string
+                displayStateVectorChart(null, results.state);
+            }
+            
+            document.getElementById('testResults').classList.remove('hidden');
+        } else {
+            alert('Error: ' + results.error);
+        }
+    } catch (error) {
+        alert('Error running test: ' + error.message);
+    }
+}
+
+function toggleMeasurementText() {
+    const textDiv = document.getElementById('measurementCountsText');
+    textDiv.classList.toggle('hidden');
+}
+
+function toggleStateText() {
+    const textDiv = document.getElementById('stateText');
+    textDiv.classList.toggle('hidden');
+}
+
+function displayMeasurementCountsChart(measurementCounts) {
+    const ctx = document.getElementById('measurementCountsChart').getContext('2d');
+    
+    // Get all measurement keys (single circuit)
+    const counts = measurementCounts || {};
+    const allKeys = Object.keys(counts).sort();
+    const data = allKeys.map(key => counts[key] || 0);
+    
+    // Destroy existing chart if it exists
+    if (measurementChart) {
+        measurementChart.destroy();
+    }
+    
+    // Create bar chart
+    measurementChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: allKeys,
+            datasets: [
+                {
+                    label: 'Count',
+                    data: data,
+                    backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Count'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Measurement Outcome'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
+                }
+            }
+        }
+    });
+    
+    // Store raw data for text display
+    document.getElementById('measurementCountsText').textContent = 
+        JSON.stringify(measurementCounts, null, 2);
+}
+
+function parseStateVector(stateStr) {
+    // Parse state vector string - handle different formats
+    // Format 1: "Statevector([1.+0.j, 0.+0.j, ...], ...)"
+    // Format 2: JSON-like array
+    // Format 3: Complex number strings
+    
+    let values = [];
+    
+    // Try to extract array from Statevector string
+    const arrayMatch = stateStr.match(/\[(.*?)\]/s);
+    if (arrayMatch) {
+        const arrayContent = arrayMatch[1];
+        // Split by comma, but be careful with complex numbers
+        const parts = arrayContent.split(',').map(s => s.trim());
+        
+        values = parts.map(part => {
+            // Remove any extra characters
+            part = part.replace(/[()]/g, '');
+            
+            // Try to match complex number patterns
+            // Pattern: real+imagj or real-imagj or just real or just imagj
+            const patterns = [
+                /([+-]?\d*\.?\d+)\s*([+-])\s*(\d*\.?\d+)j/,  // a+bj or a-bj
+                /([+-]?\d*\.?\d+)\s*\+\s*(\d*\.?\d+)j/,      // a+bj (explicit +)
+                /([+-]?\d*\.?\d+)\s*-\s*(\d*\.?\d+)j/,       // a-bj (explicit -)
+                /([+-]?\d*\.?\d+)\s*\+\s*0j/,                // a+0j
+                /([+-]?\d*\.?\d+)\s*-\s*0j/,                 // a-0j
+                /([+-]?\d*\.?\d+)j/,                         // just imagj
+                /([+-]?\d*\.?\d+)/                           // just real
+            ];
+            
+            let real = 0;
+            let imag = 0;
+            
+            for (const pattern of patterns) {
+                const match = part.match(pattern);
+                if (match) {
+                    if (match[1] !== undefined) real = parseFloat(match[1]) || 0;
+                    if (match[2] !== undefined && match[2] === '-') {
+                        imag = -(parseFloat(match[3]) || 0);
+                    } else if (match[2] !== undefined && match[2] === '+') {
+                        imag = parseFloat(match[3]) || 0;
+                    } else if (match[2] !== undefined && !isNaN(parseFloat(match[2]))) {
+                        imag = parseFloat(match[2]) || 0;
+                    }
+                    break;
+                }
+            }
+            
+            // Calculate magnitude
+            return Math.sqrt(real * real + imag * imag);
+        });
+    } else {
+        // Fallback: try to extract numbers directly
+        const numberMatches = stateStr.matchAll(/(\d+\.?\d*)/g);
+        values = Array.from(numberMatches, m => parseFloat(m[1]));
+    }
+    
+    // Filter out invalid values
+    values = values.filter(v => !isNaN(v) && isFinite(v));
+    
+    return values.length > 0 ? values : null;
+}
+
+function displayStateVectorChart(stateMagnitudes, stateStr) {
+    const ctx = document.getElementById('stateVectorChart').getContext('2d');
+    
+    // Use provided magnitudes or parse from string
+    let amplitudes = stateMagnitudes;
+    
+    if (!amplitudes) {
+        // Fallback to parsing string
+        amplitudes = parseStateVector(stateStr);
+    }
+    
+    if (!amplitudes || amplitudes.length === 0) {
+        document.getElementById('stateVectorChart').parentElement.innerHTML = 
+            '<p class="text-red-600">Error parsing state vector</p>';
+        return;
+    }
+    
+    // Create basis state labels
+    const n = amplitudes.length;
+    const labels = [];
+    for (let i = 0; i < n; i++) {
+        const binary = i.toString(2).padStart(Math.log2(n), '0');
+        labels.push(`|${binary}⟩`);
+    }
+    
+    // Destroy existing chart if it exists
+    if (stateVectorChart) {
+        stateVectorChart.destroy();
+    }
+    
+    // Create line chart for amplitude
+    stateVectorChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'State Amplitudes',
+                    data: amplitudes,
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Amplitude Magnitude'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Basis State'
+                    },
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            return 'Amplitude: ' + context.parsed.y.toFixed(4);
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    // Display text representation
+    if (stateStr) {
+        document.getElementById('stateText').textContent = stateStr;
+    }
+}
+</script>
+{% endblock %}
